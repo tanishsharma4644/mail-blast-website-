@@ -3,12 +3,6 @@ import Template from '../models/Template.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 
-function applyPreview(str, sample) {
-  return str
-    .replace(/{{\s*name\s*}}/gi, sample.name)
-    .replace(/{{\s*company\s*}}/gi, sample.company);
-}
-
 export const createTemplate = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) throw new ApiError(400, errors.array()[0].msg);
@@ -61,10 +55,8 @@ export const previewTemplate = asyncHandler(async (req, res) => {
   const template = await Template.findOne({ _id: req.params.id, userId: req.user._id });
   if (!template) throw new ApiError(404, 'Template not found');
 
-  const sample = { name: 'Alex', company: 'Acme Inc' };
-
   res.status(200).json({
-    subject: applyPreview(template.subject, sample),
-    html: applyPreview(template.htmlBody, sample),
+    subject: template.subject,
+    html: template.htmlBody,
   });
 });

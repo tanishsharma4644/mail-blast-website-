@@ -6,6 +6,40 @@ import Modal from '../components/Modal';
 import TemplateEditor from '../components/TemplateEditor';
 import { templatesApi } from '../api/templates';
 
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function looksLikeHtml(value = '') {
+  return /<\/?[a-z][\s\S]*>/i.test(String(value));
+}
+
+function renderTemplatePreview(value = '') {
+  const raw = String(value ?? '');
+  if (!raw.trim()) return 'Template body preview';
+
+  if (looksLikeHtml(raw)) {
+    return raw;
+  }
+
+  const escaped = escapeHtml(raw)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/([*∗＊]{2})([\s\S]+?)\1/g, '<strong>$2</strong>')
+    .replace(/(^|[\s(])[*∗＊]([^\n*∗＊][^\n]*?)\s*[*∗＊](?=$|[\s).,:;!?])/gm, '$1<strong>$2</strong>')
+    .replace(/\n/g, '<br/>');
+
+  return escaped.replace(
+    /(https?:\/\/[^\s<]+)/gi,
+    '<a href="$1" target="_blank" rel="noreferrer" style="color:#60a5fa;">$1</a>',
+  );
+}
+
 export default function Templates() {
   const [templates, setTemplates] = useState([]);
   const [open, setOpen] = useState(false);
@@ -69,15 +103,15 @@ export default function Templates() {
     }
   };
 
-  const previewHtml = htmlBody
-    .replace(/{{\s*name\s*}}/gi, 'Alex')
-    .replace(/{{\s*company\s*}}/gi, 'Acme Inc');
+  const bodyFormatExample = `<p>Hello {{name}},</p>
+<p>Welcome to {{company}}.</p>
+<p>Thanks,<br/>Team</p>`;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-xl font-semibold">Templates</h1>
-        <button onClick={openCreate} className="rounded-lg bg-app-accent px-4 py-2 text-sm text-white">Create Template</button>
+        <button onClick={openCreate} className="rounded-lg bg-app-accent px-6 py-2 text-sm text-white whitespace-nowrap">Create Template</button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -96,9 +130,9 @@ export default function Templates() {
         ))}
       </div>
 
-      <Modal isOpen={open} onClose={() => setOpen(false)} title={editing ? 'Edit Template' : 'Create Template'} width="max-w-4xl">
-        <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-3">
+      <Modal isOpen={open} onClose={() => setOpen(false)} title={editing ? 'Edit Template' : 'Create Template'} width="max-w-6xl">
+        <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 lg:grid-cols-3 max-h-[80vh] overflow-y-auto">
+          <div className="space-y-3 lg:col-span-2 flex flex-col">
             <div>
               <label className="mb-1 block text-sm text-app-muted">Template name</label>
               <input {...register('name', { required: true })} className="w-full rounded-lg border border-app-border bg-app-bg px-3 py-2" />
@@ -108,17 +142,39 @@ export default function Templates() {
               <input {...register('subject', { required: true })} className="w-full rounded-lg border border-app-border bg-app-bg px-3 py-2" />
             </div>
 
-            <TemplateEditor value={htmlBody} onChange={setHtmlBody} />
+            <div className="flex-grow">
+              <TemplateEditor value={htmlBody} onChange={setHtmlBody} />
+            </div>
 
-            <button type="submit" className="w-full rounded-lg bg-app-accent py-2 text-white">
+            <button type="submit" className="w-full rounded-lg bg-app-accent py-3 text-white font-semibold hover:bg-app-accent/90 transition">
               {editing ? 'Update Template' : 'Save Template'}
             </button>
           </div>
 
           <div className="rounded-xl border border-app-border bg-app-bg p-3">
-            <p className="text-xs uppercase tracking-widest text-app-muted">Live Preview</p>
+            <div className="rounded-lg border border-app-border bg-app-card p-3 text-xs text-app-muted">
+              <p className="font-semibold text-app-text">Body format</p>
+              <p className="mt-1">
+                Write email body in HTML or plain-text/markdown style format. You can use variables like
+                {' '}
+                {'{{name}}'}
+                {' '}
+                and
+                {' '}
+                {'{{company}}'}.
+              </p>
+              <pre className="mt-2 overflow-x-auto rounded-md border border-app-border bg-app-bg p-2 text-[11px] text-app-text" style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
+                {bodyFormatExample}
+              </pre>
+            </div>
+
+            <p className="text-xs uppercase tracking-widest text-app-muted mt-3">Live Preview</p>
             <h3 className="mt-2 text-sm font-semibold">{subject || 'Subject preview'}</h3>
-            <div className="mt-3 min-h-40 rounded-lg border border-app-border p-3 text-sm" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+            <div
+              className="mt-3 min-h-40 rounded-lg border border-app-border p-3 text-sm bg-app-card overflow-auto"
+              style={{ wordWrap: 'break-word' }}
+              dangerouslySetInnerHTML={{ __html: renderTemplatePreview(htmlBody) }}
+            />
           </div>
         </form>
       </Modal>

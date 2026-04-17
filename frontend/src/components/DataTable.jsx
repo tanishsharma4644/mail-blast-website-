@@ -46,7 +46,7 @@ export default function DataTable({
   };
 
   return (
-    <div className="rounded-2xl border border-app-border bg-app-card p-4">
+    <div className="rounded-2xl border border-app-border bg-app-card p-4 flex flex-col h-full">
       <div className="mb-4 flex items-center justify-between gap-3">
         <input
           className="w-full max-w-sm rounded-lg border border-app-border bg-app-bg px-3 py-2 text-sm text-app-text"
@@ -59,7 +59,7 @@ export default function DataTable({
         />
       </div>
 
-      <div className="overflow-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-auto" style={{ scrollBehavior: 'smooth' }}>
         <table className="w-full min-w-[700px] table-auto border-collapse text-left text-sm">
           <thead>
             <tr>

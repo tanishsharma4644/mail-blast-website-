@@ -48,7 +48,14 @@ export default function Leads() {
       toast.success(data.message || 'Emails imported');
       setEmailsText('');
       setOpen(false);
-      fetchLeads();
+      
+      // Fetch leads after import
+      const { data: leadsData } = await leadsApi.list({ page: 1, limit: 100 });
+      const importedLeads = leadsData.items || [];
+      setLeads(importedLeads);
+      
+      // Auto-select all leads after import
+      setSelectedRows(importedLeads.map(lead => lead._id));
     } catch (error) {
       toast.error(error.response?.data?.message || 'Email import failed');
     }
@@ -67,7 +74,7 @@ export default function Leads() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-screen flex flex-col overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Leads</h1>
         <div className="flex flex-wrap gap-2">
@@ -82,6 +89,12 @@ export default function Leads() {
           </label>
           <button onClick={onBulkImport} className="rounded-lg border border-app-border px-3 py-2 text-sm">
             Upload
+          </button>
+          <button 
+            onClick={() => setSelectedRows(leads.map(lead => lead._id))} 
+            className="rounded-lg border border-app-border px-3 py-2 text-sm hover:bg-app-border/20"
+          >
+            Select All
           </button>
           <button onClick={onDeleteSelected} className="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-400">
             Bulk Delete
@@ -98,21 +111,23 @@ export default function Leads() {
         </div>
       )}
 
-      <DataTable
-        columns={[
-          { key: 'name', header: 'Name' },
-          { key: 'email', header: 'Email' },
-          { key: 'company', header: 'Company' },
-          { key: 'status', header: 'Status', render: (value) => <Badge status={value} /> },
-          { key: 'createdAt', header: 'Created', render: (value) => formatDate(value) },
-        ]}
-        rows={leads}
-        selectable
-        selectedRows={selectedRows}
-        onToggleRow={(id) => {
-          setSelectedRows((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-        }}
-      />
+      <div className="flex-1 min-h-0">
+        <DataTable
+          columns={[
+            { key: 'name', header: 'Name' },
+            { key: 'email', header: 'Email' },
+            { key: 'company', header: 'Company' },
+            { key: 'status', header: 'Status', render: (value) => <Badge status={value} /> },
+            { key: 'createdAt', header: 'Created', render: (value) => formatDate(value) },
+          ]}
+          rows={leads}
+          selectable
+          selectedRows={selectedRows}
+          onToggleRow={(id) => {
+            setSelectedRows((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+          }}
+        />
+      </div>
 
       <Modal isOpen={open} onClose={() => setOpen(false)} title="Add Emails" width="max-w-3xl">
         <div className="space-y-3">

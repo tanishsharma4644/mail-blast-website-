@@ -14,7 +14,7 @@ function getRefreshCookieOptions() {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: 10 * 24 * 60 * 60 * 1000,
   };
 }
 
@@ -101,16 +101,14 @@ export const login = asyncHandler(async (req, res) => {
   const email = req.body.email.toLowerCase().trim();
 
   const user = await User.findOne({ email });
-  if (!user) {
-    throw new ApiError(404, 'Account not found');
-  }
 
   const existingOtp = await OTP.findOne({ email });
   if (existingOtp && new Date(existingOtp.resendAvailableAt) > new Date()) {
     throw new ApiError(429, 'Please wait before requesting another OTP');
   }
 
-  await createAndSendOtp({ name: user.name, email });
+  const derivedName = email.split('@')[0] || 'User';
+  await createAndSendOtp({ name: user?.name || derivedName, email });
 
   res.status(200).json({ message: 'OTP sent to your email' });
 });
@@ -139,10 +137,13 @@ export const verifyLoginOtp = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Invalid OTP');
   }
 
-  const user = await User.findOne({ email });
+  let user = await User.findOne({ email });
   if (!user) {
-    await OTP.deleteOne({ _id: otpDoc._id });
-    throw new ApiError(404, 'Account not found');
+    const derivedName = otpDoc.name || email.split('@')[0] || 'User';
+    user = await User.create({
+      name: derivedName,
+      email,
+    });
   }
 
   await OTP.deleteOne({ _id: otpDoc._id });

@@ -47,7 +47,7 @@ export default function Logs() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-screen flex flex-col overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Global Logs</h1>
         <button onClick={onExport} className="rounded-lg border border-app-border px-3 py-2 text-sm">Export CSV</button>
@@ -81,18 +81,20 @@ export default function Logs() {
         <button type="submit" className="rounded-lg bg-app-accent px-3 py-2 text-sm text-white">Apply</button>
       </form>
 
-      <DataTable
-        columns={[
-          { key: 'leadEmail', header: 'Email' },
-          { key: 'campaignName', header: 'Campaign' },
-          { key: 'smtpUsed', header: 'SMTP Used' },
-          { key: 'templateUsed', header: 'Template' },
-          { key: 'status', header: 'Status', render: (value) => <Badge status={value} /> },
-          { key: 'timestamp', header: 'Timestamp', render: (value) => formatDate(value) },
-        ]}
-        rows={logs}
-        pageSize={15}
-      />
+      <div className="flex-1 min-h-0">
+        <DataTable
+          columns={[
+            { key: 'leadEmail', header: 'Email' },
+            { key: 'campaignName', header: 'Campaign' },
+            { key: 'smtpUsed', header: 'SMTP Used' },
+            { key: 'templateUsed', header: 'Template' },
+            { key: 'status', header: 'Status', render: (value) => <Badge status={value} /> },
+            { key: 'timestamp', header: 'Timestamp', render: (value) => formatDate(value) },
+          ]}
+          rows={logs}
+          pageSize={15}
+        />
+      </div>
     </div>
   );
 }

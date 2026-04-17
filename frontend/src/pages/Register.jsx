@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import OTPInput from '../components/OTPInput';
@@ -18,6 +18,7 @@ function formatMMSS(seconds) {
 export default function Register() {
   const { sendOtp, verifyOtp } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState(1);
   const [otp, setOtp] = useState('');
   const [identity, setIdentity] = useState(null);
@@ -28,7 +29,7 @@ export default function Register() {
   const canResend = resendSeconds <= 0;
 
   const registerForm = useForm({
-    defaultValues: { name: '', email: '' },
+    defaultValues: { name: '', email: location.state?.email || '' },
   });
 
   useEffect(() => {

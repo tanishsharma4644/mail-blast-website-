@@ -69,7 +69,7 @@ export default function Campaigns() {
   }));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-screen flex flex-col overflow-hidden">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Campaigns</h1>
         <button onClick={() => setOpen(true)} className="rounded-lg bg-app-accent px-4 py-2 text-sm text-white">
@@ -77,7 +77,8 @@ export default function Campaigns() {
         </button>
       </div>
 
-      <DataTable
+      <div className="flex-1 min-h-0">
+        <DataTable
         columns={[
           { key: 'name', header: 'Name' },
           { key: 'status', header: 'Status', render: (value) => <Badge status={value} /> },
@@ -107,6 +108,7 @@ export default function Campaigns() {
         ]}
         rows={rows}
       />
+      </div>
 
       <Modal isOpen={open} onClose={() => setOpen(false)} title="Campaign Builder" width="max-w-4xl">
         <CampaignBuilder

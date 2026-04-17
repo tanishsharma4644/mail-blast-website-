@@ -8,6 +8,13 @@ const smtpAccountSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    ownerEmail: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+      index: true,
+    },
     label: {
       type: String,
       required: true,
@@ -49,6 +56,7 @@ const smtpAccountSchema = new mongoose.Schema(
 );
 
 smtpAccountSchema.index({ userId: 1, email: 1 }, { unique: true });
+smtpAccountSchema.index({ ownerEmail: 1, email: 1 }, { unique: true });
 
 // Reset sent count at midnight
 smtpAccountSchema.methods.resetIfNeeded = function() {

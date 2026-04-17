@@ -10,9 +10,45 @@ import { decrypt } from '../utils/encrypt.js';
 const runningCampaigns = new Map();
 
 function applyTemplate(str, lead) {
-  return str
+  return String(str ?? '')
     .replace(/{{\s*name\s*}}/gi, lead.name || '')
     .replace(/{{\s*company\s*}}/gi, lead.company || '');
+}
+
+function getJitteredDelay(baseMs) {
+  const base = Math.max(300, Number(baseMs || 2000));
+  // Add +-35% delay jitter to avoid fixed sending rhythm.
+  const jitterRatio = 0.35;
+  const jitter = Math.floor(base * jitterRatio);
+  return Math.max(250, base + Math.floor(Math.random() * (jitter * 2 + 1)) - jitter);
+}
+
+async function pickAvailableSmtpAccount({ smtpAccounts, userId }) {
+  if (!smtpAccounts.length) return null;
+
+  const randomized = shuffle([...smtpAccounts]);
+  for (const smtp of randomized) {
+    const freshSmtp = await SMTPAccount.findOne({ _id: smtp._id, userId }).select('+appPassword');
+    if (!freshSmtp) continue;
+
+    const beforeReset = freshSmtp.sentToday;
+    freshSmtp.resetIfNeeded();
+    if (freshSmtp.sentToday !== beforeReset) {
+      await SMTPAccount.updateOne(
+        { _id: freshSmtp._id },
+        { sentToday: freshSmtp.sentToday, lastResetDate: freshSmtp.lastResetDate },
+      );
+    }
+
+    if (freshSmtp.sentToday < freshSmtp.dailyLimit) {
+      return {
+        ...smtp,
+        appPassword: decrypt(freshSmtp.appPassword),
+      };
+    }
+  }
+
+  return null;
 }
 
 export function stopCampaignExecution(campaignId) {
@@ -27,12 +63,7 @@ export async function runCampaign(campaignId, userId) {
 
   const leads = await Lead.find({ _id: { $in: campaign.leadIds }, userId, status: 'active' }).lean();
   const templates = await Template.find({ _id: { $in: campaign.templateIds }, userId }).lean();
-  const smtpAccountsRaw = await SMTPAccount.find({ _id: { $in: campaign.smtpIds }, userId, isActive: true }).select('+appPassword').lean();
-
-  const smtpAccounts = smtpAccountsRaw.map((smtp) => ({
-    ...smtp,
-    appPassword: decrypt(smtp.appPassword),
-  }));
+  const smtpAccounts = await SMTPAccount.find({ _id: { $in: campaign.smtpIds }, userId, isActive: true }).lean();
 
   if (!leads.length || !templates.length || !smtpAccounts.length) {
     await Campaign.updateOne({ _id: campaign._id }, { status: 'failed', completedAt: new Date() });
@@ -41,7 +72,6 @@ export async function runCampaign(campaignId, userId) {
 
   const shuffledLeads = shuffle([...leads]);
   const shuffledTemplates = shuffle([...templates]);
-  const shuffledSmtp = shuffle([...smtpAccounts]);
 
   for (let i = 0; i < shuffledLeads.length; i += 1) {
     if (!runningCampaigns.get(String(campaignId))) {
@@ -51,37 +81,27 @@ export async function runCampaign(campaignId, userId) {
 
     const lead = shuffledLeads[i];
     const template = shuffledTemplates[i % shuffledTemplates.length];
-    let smtp = shuffledSmtp[i % shuffledSmtp.length];
+    const smtp = await pickAvailableSmtpAccount({ smtpAccounts, userId });
+    if (!smtp) {
+      await Log.create({
+        campaignId: campaign._id,
+        userId,
+        leadEmail: lead.email,
+        smtpUsed: 'N/A',
+        templateUsed: template.name,
+        status: 'failed',
+        errorMessage: 'All SMTP accounts reached their daily limits',
+        timestamp: new Date(),
+      });
 
-    // Check daily limit for SMTP account
-    const freshSmtp = await SMTPAccount.findById(smtp._id).select('+appPassword');
-    if (freshSmtp) {
-      freshSmtp.resetIfNeeded();
-      
-      if (freshSmtp.sentToday >= freshSmtp.dailyLimit) {
-        console.log(`[CAMPAIGN] SMTP ${smtp.email} limit reached (${freshSmtp.sentToday}/${freshSmtp.dailyLimit})`);
-        
-        await Log.create({
-          campaignId: campaign._id,
-          userId,
-          leadEmail: lead.email,
-          smtpUsed: smtp.email,
-          templateUsed: template.name,
-          status: 'failed',
-          errorMessage: `SMTP limit reached: ${freshSmtp.sentToday}/${freshSmtp.dailyLimit} emails sent today`,
-          timestamp: new Date(),
-        });
-
-        await Campaign.updateOne({ _id: campaign._id }, { $inc: { failedCount: 1 } });
-        continue;
-      }
+      await Campaign.updateOne({ _id: campaign._id }, { $inc: { failedCount: 1 } });
+      continue;
     }
 
     const html = applyTemplate(template.htmlBody, lead);
     const subject = applyTemplate(template.subject, lead);
 
     try {
-      console.log(`[CAMPAIGN] Sending to ${lead.email} via ${smtp.email}`);
       await sendEmail({
         to: lead.email,
         subject,
@@ -122,7 +142,7 @@ export async function runCampaign(campaignId, userId) {
     }
 
     if (i < shuffledLeads.length - 1) {
-      await delay(campaign.delayMs || 2000);
+      await delay(getJitteredDelay(campaign.delayMs || 2000));
     }
   }
 

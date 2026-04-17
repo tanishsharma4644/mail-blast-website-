@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import toast from 'react-hot-toast';
 
 const steps = ['Name', 'Leads', 'Templates', 'SMTP', 'Review'];
 
@@ -16,6 +17,8 @@ export default function CampaignBuilder({ leads, templates, smtpAccounts, onSubm
   });
 
   const values = watch();
+  const hasSmtpAccounts = smtpAccounts.length > 0;
+  const hasSelectedSmtp = values.smtpIds.length > 0;
 
   const toggleItem = (field, id) => {
     const current = new Set(values[field]);
@@ -23,6 +26,15 @@ export default function CampaignBuilder({ leads, templates, smtpAccounts, onSubm
     else current.add(id);
     setValue(field, [...current]);
   };
+
+  const onLaunch = handleSubmit((formValues) => {
+    if (!formValues.smtpIds.length) {
+      toast.error('Please select at least one SMTP account');
+      return;
+    }
+
+    onSubmit(formValues);
+  });
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -54,13 +66,32 @@ export default function CampaignBuilder({ leads, templates, smtpAccounts, onSubm
       )}
 
       {step === 1 && (
-        <div className="grid gap-2">
-          {leads.map((lead) => (
-            <label key={lead._id} className="flex items-center gap-2 rounded-lg border border-app-border p-2">
-              <input type="checkbox" checked={values.leadIds.includes(lead._id)} onChange={() => toggleItem('leadIds', lead._id)} />
-              <span>{lead.name} ({lead.email})</span>
-            </label>
-          ))}
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setValue('leadIds', leads.map(lead => lead._id))}
+              className="rounded-lg bg-app-accent px-3 py-2 text-xs font-medium text-white hover:bg-app-accent/90"
+            >
+              Select All ({leads.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setValue('leadIds', [])}
+              className="rounded-lg border border-app-border px-3 py-2 text-xs hover:bg-app-border/20"
+            >
+              Clear All
+            </button>
+          </div>
+          <div className="grid gap-2 max-h-96 overflow-y-auto">
+            {leads.map((lead) => (
+              <label key={lead._id} className="flex items-center gap-2 rounded-lg border border-app-border p-2">
+                <input type="checkbox" checked={values.leadIds.includes(lead._id)} onChange={() => toggleItem('leadIds', lead._id)} />
+                <span>{lead.name} ({lead.email})</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-app-muted">Selected leads: {values.leadIds.length}</p>
         </div>
       )}
 
@@ -78,6 +109,11 @@ export default function CampaignBuilder({ leads, templates, smtpAccounts, onSubm
 
       {step === 3 && (
         <div className="space-y-3">
+          {!hasSmtpAccounts && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+              No SMTP accounts found. Add at least one SMTP account on the SMTP page before launching a campaign.
+            </div>
+          )}
           <div className="grid gap-2">
             {smtpAccounts.map((smtp) => (
               <label key={smtp.id || smtp._id} className="flex items-center gap-2 rounded-lg border border-app-border p-2">
@@ -109,6 +145,11 @@ export default function CampaignBuilder({ leads, templates, smtpAccounts, onSubm
           <p>Templates: {values.templateIds.length}</p>
           <p>SMTP Accounts: {values.smtpIds.length}</p>
           <p>Delay: {values.delayMs} ms</p>
+          {!hasSelectedSmtp && (
+            <p className="mt-2 text-sm text-red-400">
+              Select at least one SMTP account to launch the campaign.
+            </p>
+          )}
         </div>
       )}
 
@@ -131,7 +172,12 @@ export default function CampaignBuilder({ leads, templates, smtpAccounts, onSubm
             Next
           </button>
         ) : (
-          <button type="submit" className="rounded-lg bg-app-accent px-4 py-2 text-sm font-medium text-white">
+          <button
+            type="button"
+            onClick={onLaunch}
+            disabled={!hasSelectedSmtp}
+            className="rounded-lg bg-app-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
             Launch Campaign
           </button>
         )}

@@ -4,9 +4,71 @@ function normalizeAppPassword(value = '') {
   return String(value).replace(/\s+/g, '');
 }
 
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function looksLikeHtml(value = '') {
+  return /<\/?[a-z][\s\S]*>/i.test(String(value));
+}
+
+function linkifyEscapedText(value = '') {
+  return String(value).replace(
+    /(https?:\/\/[^\s<]+)/gi,
+    '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#2563eb;">$1</a>',
+  );
+}
+
+function applyInlineFormatting(value = '') {
+  return String(value)
+    // Supports ASCII '*' and common Unicode star variants.
+    .replace(/([*∗＊]{2})([\s\S]+?)\1/g, '<strong>$2</strong>')
+    .replace(/(^|[\s(])[*∗＊]([^\n*∗＊][^\n]*?)\s*[*∗＊](?=$|[\s).,:;!?])/gm, '$1<strong>$2</strong>');
+}
+
+function buildPlainTextFallback(value = '') {
+  return String(value)
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export function normalizeEmailHtml(value = '') {
+  const raw = String(value ?? '');
+  if (!raw.trim()) return '<div></div>';
+
+  if (looksLikeHtml(raw)) {
+    return raw;
+  }
+
+  const escaped = escapeHtml(raw).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const withFormatting = applyInlineFormatting(escaped);
+  const withLinks = linkifyEscapedText(withFormatting);
+
+  return `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;white-space:pre-wrap;word-break:break-word;">
+      ${withLinks}
+    </div>
+  `;
+}
+
 export async function sendEmail({ to, subject, html, smtpConfig }) {
+  const finalHtml = normalizeEmailHtml(html);
+  const senderName = smtpConfig?.label ? String(smtpConfig.label).trim() : '';
+  const fromAddress = senderName ? `${senderName} <${smtpConfig.email}>` : smtpConfig.email;
+
   const transporter = nodemailer.createTransport({
     service: 'gmail',
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 100,
     auth: {
       user: smtpConfig.email,
       pass: normalizeAppPassword(smtpConfig.appPassword),
@@ -14,10 +76,17 @@ export async function sendEmail({ to, subject, html, smtpConfig }) {
   });
 
   return transporter.sendMail({
-    from: smtpConfig.email,
+    from: fromAddress,
     to,
     subject,
-    html,
+    html: finalHtml,
+    text: buildPlainTextFallback(finalHtml),
+    replyTo: smtpConfig.email,
+    headers: {
+      'X-Auto-Response-Suppress': 'All',
+      'List-Unsubscribe': `<mailto:${smtpConfig.email}?subject=unsubscribe>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
   });
 }
 
